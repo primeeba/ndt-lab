@@ -45,15 +45,32 @@ const ISOTOPES = {
   'Co-60':  { focalSpot: 3.0 },
 }
 
-// ── FILM SPEED FACTORS (relative to Agfa D7 = 1.0) ───────────
+// ── FILM SPEED FACTORS (relative to Agfa D7 = 1.0, ASTM E1815) ──
 const FILMS = [
-  { label: 'Agfa D7 / Kodak AA400',   factor: 1.0  },
-  { label: 'Fuji IX100',               factor: 1.2  },
-  { label: 'Agfa D5 / Kodak T200',    factor: 1.8  },
-  { label: 'Fuji IX50',               factor: 2.2  },
-  { label: 'Agfa D4 / Kodak MX125',   factor: 3.5  },
-  { label: 'Agfa D3',                  factor: 5.0  },
-  { label: 'Agfa D2',                  factor: 7.0  },
+  // ── Class III (Fast) ──────────────────────────────────────
+  { label: 'Agfa D7 / Structurix D7',         class: 'III', factor: 1.0  },
+  { label: 'Kodak AA400 / Industrex AA400',    class: 'III', factor: 1.0  },
+  { label: 'Fuji IX100',                        class: 'III', factor: 1.1  },
+  { label: 'AGFA Structurix D7-4S',            class: 'III', factor: 1.0  },
+  // ── Class II (Medium) ─────────────────────────────────────
+  { label: 'Agfa D5 / Structurix D5',          class: 'II',  factor: 2.0  },
+  { label: 'Kodak T200 / Industrex T200',      class: 'II',  factor: 2.0  },
+  { label: 'Fuji IX50',                         class: 'II',  factor: 2.2  },
+  { label: 'Fuji IX80',                         class: 'II',  factor: 1.6  },
+  { label: 'Kodak MX125',                       class: 'II',  factor: 2.5  },
+  { label: 'AGFA Structurix D5-4S',            class: 'II',  factor: 2.0  },
+  // ── Class I (Fine Grain) ──────────────────────────────────
+  { label: 'Agfa D4 / Structurix D4',          class: 'I',   factor: 3.5  },
+  { label: 'Kodak AA / Industrex AA',           class: 'I',   factor: 3.5  },
+  { label: 'Fuji IX25',                         class: 'I',   factor: 4.0  },
+  { label: 'AGFA Structurix D4-4S',            class: 'I',   factor: 3.5  },
+  // ── Class I (Ultra Fine) ──────────────────────────────────
+  { label: 'Agfa D3 / Structurix D3',          class: 'I',   factor: 5.5  },
+  { label: 'Agfa D2 / Structurix D2',          class: 'I',   factor: 8.0  },
+  { label: 'Kodak Ultra T / Industrex Ultra T', class: 'I',   factor: 6.0  },
+  { label: 'Fuji IX',                           class: 'I',   factor: 5.0  },
+  { label: 'Kodak Industrex HF',                class: 'I',   factor: 4.5  },
+  { label: 'AGFA Structurix D2-4S',            class: 'I',   factor: 8.0  },
 ]
 
 // ── GEOMETRY CONSTANTS ────────────────────────────────────────
@@ -153,6 +170,7 @@ export default function Home({ onNav }) {
   const [technique, setTech]    = useState('swv')
   const [activity, setActivity] = useState('')
   const [isotope, setIsotope]   = useState('Ir-192')
+  const [focalSpot, setFocal]   = useState('2.0')
   const [filmIdx, setFilmIdx]   = useState(0)
   const [result, setResult]     = useState(null)
   const [error, setError]       = useState('')
@@ -177,8 +195,8 @@ export default function Home({ onNav }) {
 
     const cmAdjusted = cm * film.factor
     const expMin = cmAdjusted / a
-    const focalSpot = ISOTOPES[isotope].focalSpot
-    const ugMm = calcUg(focalSpot, ofd, sfd)
+    const fs = parseFloat(focalSpot) || ISOTOPES[isotope].focalSpot
+    const ugMm = calcUg(fs, ofd, sfd)
     const ugIn = ugMm ? ugMm / 25.4 : null
 
     setResult({
@@ -259,26 +277,35 @@ export default function Home({ onNav }) {
           </div>
         </div>
 
-        {/* 4. SOURCE TYPE + CURIES side by side */}
+        {/* 4. SOURCE TYPE + SOURCE SIZE + CURIES */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
             <label className="label">④ Source Type</label>
-            <select className="input" value={isotope} onChange={e => setIsotope(e.target.value)}>
+            <select className="input" value={isotope} onChange={e => { setIsotope(e.target.value); setFocal(String(ISOTOPES[e.target.value].focalSpot)) }}>
               {Object.keys(ISOTOPES).map(k => <option key={k}>{k}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">⑤ Curies (Ci)</label>
-            <input className="input" type="number" placeholder="e.g. 50" value={activity}
-              onChange={e => setActivity(e.target.value)} inputMode="decimal" />
+            <label className="label">Source Size (mm)</label>
+            <input className="input" type="number" placeholder="e.g. 2.0" value={focalSpot}
+              onChange={e => setFocal(e.target.value)} inputMode="decimal" step="0.5" />
           </div>
         </div>
+        <div>
+          <label className="label">⑤ Curies (Ci)</label>
+          <input className="input" type="number" placeholder="e.g. 50" value={activity}
+            onChange={e => setActivity(e.target.value)} inputMode="decimal" />
+        </div>
 
-        {/* 5. FILM */}
+        {/* 6. FILM */}
         <div>
           <label className="label">⑥ Film Type</label>
           <select className="input" value={filmIdx} onChange={e => setFilmIdx(Number(e.target.value))}>
-            {FILMS.map((f, i) => <option key={i} value={i}>{f.label} {f.factor > 1 ? `(${f.factor}× slower)` : '(baseline)'}</option>)}
+            {FILMS.map((f, i) => (
+              <option key={i} value={i}>
+                [{f.class}] {f.label}{f.factor > 1 ? ` — ${f.factor}×` : ' — baseline'}
+              </option>
+            ))}
           </select>
         </div>
 
