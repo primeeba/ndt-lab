@@ -217,9 +217,8 @@ export default function Home({ onNav }) {
 
   const od    = odIdx !== '' ? PIPE_OD[odIdx].od : null
   const t     = parseFloat(wallT) || 0
-  const ofd   = ofdCalc
   const fs    = parseFloat(focalSpot) || ISOTOPES[isotope]?.focalSpot || 2.0
-  const ofdCalc = (od && t > 0) ? calcOFD(t, od, technique) : null
+  const ofd   = (od && t > 0) ? calcOFD(t, od, technique) : null
   const sfd   = (od && t > 0) ? calcSFD(od, t, technique, fs) : null
   const radT  = t > 0 ? calcRadThickness(t, technique) : null
   const film  = FILMS[filmIdx]
@@ -232,7 +231,7 @@ export default function Home({ onNav }) {
     if (!a || a<=0){ setError('Enter source activity (Ci)'); return }
     if (od - 2*t <= 0){ setError('Wall thickness too large for this OD'); return }
 
-    const ofdUsed = calcOFD(t, od, technique)
+    const ofdUsed = ofd
     const sfdUsed = parseFloat(sfdOverride) > 0 ? parseFloat(sfdOverride) : sfd
     const cm = getBaseCurieMin(isotope, radT, sfdUsed)
     if (!cm) { setError('Thickness out of range for this isotope'); return }
