@@ -46,32 +46,41 @@ const ISOTOPES = {
 }
 
 // ── FILM SPEED FACTORS (relative to Agfa D7 = 1.0, ASTM E1815) ──
+// gamma = film contrast gradient in useful density range (used for density correction)
 const FILMS = [
   // ── Class III (Fast) ──────────────────────────────────────
-  { label: 'Agfa D7 / Structurix D7',         class: 'III', factor: 1.0  },
-  { label: 'Kodak AA400 / Industrex AA400',    class: 'III', factor: 1.0  },
-  { label: 'Fuji IX100',                        class: 'III', factor: 1.1  },
-  { label: 'AGFA Structurix D7-4S',            class: 'III', factor: 1.0  },
+  { label: 'Agfa D7 / Structurix D7',          class: 'III', factor: 1.0,  gamma: 3.2 },
+  { label: 'Kodak AA400 / Industrex AA400',     class: 'III', factor: 1.0,  gamma: 3.2 },
+  { label: 'Fuji IX100',                         class: 'III', factor: 1.1,  gamma: 3.2 },
+  { label: 'AGFA Structurix D7-4S',             class: 'III', factor: 1.0,  gamma: 3.2 },
   // ── Class II (Medium) ─────────────────────────────────────
-  { label: 'Agfa D5 / Structurix D5',          class: 'II',  factor: 2.0  },
-  { label: 'Kodak T200 / Industrex T200',      class: 'II',  factor: 2.0  },
-  { label: 'Fuji IX50',                         class: 'II',  factor: 2.2  },
-  { label: 'Fuji IX80',                         class: 'II',  factor: 1.6  },
-  { label: 'Kodak MX125',                       class: 'II',  factor: 2.5  },
-  { label: 'AGFA Structurix D5-4S',            class: 'II',  factor: 2.0  },
+  { label: 'Agfa D5 / Structurix D5',           class: 'II',  factor: 2.0,  gamma: 3.5 },
+  { label: 'Kodak T200 / Industrex T200',       class: 'II',  factor: 2.0,  gamma: 3.5 },
+  { label: 'Fuji IX50',                          class: 'II',  factor: 2.2,  gamma: 3.5 },
+  { label: 'Fuji IX80',                          class: 'II',  factor: 1.6,  gamma: 3.4 },
+  { label: 'Kodak MX125',                        class: 'II',  factor: 2.5,  gamma: 3.6 },
+  { label: 'AGFA Structurix D5-4S',             class: 'II',  factor: 2.0,  gamma: 3.5 },
   // ── Class I (Fine Grain) ──────────────────────────────────
-  { label: 'Agfa D4 / Structurix D4',          class: 'I',   factor: 3.5  },
-  { label: 'Kodak AA / Industrex AA',           class: 'I',   factor: 3.5  },
-  { label: 'Fuji IX25',                         class: 'I',   factor: 4.0  },
-  { label: 'AGFA Structurix D4-4S',            class: 'I',   factor: 3.5  },
+  { label: 'Agfa D4 / Structurix D4',           class: 'I',   factor: 3.5,  gamma: 4.0 },
+  { label: 'Kodak AA / Industrex AA',            class: 'I',   factor: 3.5,  gamma: 4.0 },
+  { label: 'Fuji IX25',                          class: 'I',   factor: 4.0,  gamma: 4.2 },
+  { label: 'AGFA Structurix D4-4S',             class: 'I',   factor: 3.5,  gamma: 4.0 },
   // ── Class I (Ultra Fine) ──────────────────────────────────
-  { label: 'Agfa D3 / Structurix D3',          class: 'I',   factor: 5.5  },
-  { label: 'Agfa D2 / Structurix D2',          class: 'I',   factor: 8.0  },
-  { label: 'Kodak Ultra T / Industrex Ultra T', class: 'I',   factor: 6.0  },
-  { label: 'Fuji IX',                           class: 'I',   factor: 5.0  },
-  { label: 'Kodak Industrex HF',                class: 'I',   factor: 4.5  },
-  { label: 'AGFA Structurix D2-4S',            class: 'I',   factor: 8.0  },
+  { label: 'Agfa D3 / Structurix D3',           class: 'I',   factor: 5.5,  gamma: 4.5 },
+  { label: 'Agfa D2 / Structurix D2',           class: 'I',   factor: 8.0,  gamma: 5.0 },
+  { label: 'Kodak Ultra T / Industrex Ultra T',  class: 'I',   factor: 6.0,  gamma: 4.8 },
+  { label: 'Fuji IX',                            class: 'I',   factor: 5.0,  gamma: 4.5 },
+  { label: 'Kodak Industrex HF',                 class: 'I',   factor: 4.5,  gamma: 4.2 },
+  { label: 'AGFA Structurix D2-4S',             class: 'I',   factor: 8.0,  gamma: 5.0 },
 ]
+
+// Density correction factor relative to reference density 2.0H
+// CF = 10^((D_target - D_ref) / gamma)
+// CF > 1 = need more exposure, CF < 1 = need less
+function densityCF(targetDensity, gamma) {
+  const D_REF = 2.0
+  return Math.pow(10, (targetDensity - D_REF) / gamma)
+}
 
 // ── GEOMETRY CONSTANTS ────────────────────────────────────────
 const WELD_BUILDUP    = 0.125    // internal weld reinforcement (source side for SWV)
@@ -172,6 +181,7 @@ export default function Home({ onNav }) {
   const [isotope, setIsotope]   = useState('Ir-192')
   const [focalSpot, setFocal]   = useState('2.0')
   const [filmIdx, setFilmIdx]   = useState(0)
+  const [targetD, setTargetD]   = useState('2.5')
   const [result, setResult]     = useState(null)
   const [error, setError]       = useState('')
 
@@ -193,7 +203,9 @@ export default function Home({ onNav }) {
     const cm = getBaseCurieMin(isotope, radT, sfd)
     if (!cm) { setError('Thickness out of range for this isotope'); return }
 
-    const cmAdjusted = cm * film.factor
+    const dTarget = parseFloat(targetD) || 2.0
+    const dcf = densityCF(dTarget, film.gamma)
+    const cmAdjusted = cm * film.factor * dcf
     const expMin = cmAdjusted / a
     const fs = parseFloat(focalSpot) || ISOTOPES[isotope].focalSpot
     const ugMm = calcUg(fs, ofd, sfd)
@@ -203,7 +215,7 @@ export default function Home({ onNav }) {
       expMin, cmAdjusted,
       ofd, sfd, radT,
       ugIn, ugPass: ugIn !== null ? ugIn <= 0.020 : null,
-      filmLabel: film.label,
+      filmLabel: film.label, dTarget, dcf,
       summary: `${isotope} · ${PIPE_OD[odIdx].label} · ${t}" wall · ${a} Ci · ${TECHNIQUES.find(x=>x.id===technique).label}`,
     })
   }
@@ -297,7 +309,7 @@ export default function Home({ onNav }) {
             onChange={e => setActivity(e.target.value)} inputMode="decimal" />
         </div>
 
-        {/* 6. FILM */}
+        {/* 6. FILM + TARGET DENSITY */}
         <div>
           <label className="label">⑥ Film Type</label>
           <select className="input" value={filmIdx} onChange={e => setFilmIdx(Number(e.target.value))}>
@@ -307,6 +319,14 @@ export default function Home({ onNav }) {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="label">⑦ Target Film Density</label>
+          <input className="input" type="number" placeholder="e.g. 2.5" value={targetD}
+            onChange={e => setTargetD(e.target.value)} inputMode="decimal" step="0.1" min="1.5" max="4.0" />
+          <div style={{ fontSize: 11, color: '#444', marginTop: 4 }}>
+            ASME range: 1.8 – 4.0 H&D · Ref density = 2.0H · Midrange target = 2.5H
+          </div>
         </div>
 
         {error && (
@@ -331,7 +351,17 @@ export default function Home({ onNav }) {
               <div style={{ fontSize: 15, color: '#888', marginTop: 8 }}>
                 {result.cmAdjusted.toFixed(1)} <span style={{ color: '#555' }}>Ci·min</span>
               </div>
-              <div style={{ fontSize: 11, color: '#333', marginTop: 4 }}>{result.filmLabel}</div>
+              <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center', gap: 16 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#444' }}>Target Density</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#5bc8f5' }}>{result.dTarget}H</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#444' }}>Density R Factor</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#a78bfa' }}>{result.dcf.toFixed(3)}×</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: '#333', marginTop: 6 }}>{result.filmLabel}</div>
             </div>
 
             {/* Ug result */}
