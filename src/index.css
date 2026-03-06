@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #0f1117; color: #f0f0f0; -webkit-tap-highlight-color: transparent; }
+
+.btn-primary {
+  display: block; width: 100%; padding: 16px;
+  background: #00c896; color: #000; font-weight: 700; font-size: 16px;
+  border: none; border-radius: 12px; cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-primary:active { background: #00a87e; }
+
+.input {
+  width: 100%; padding: 14px 16px; background: #1e2130;
+  border: 1px solid #2e3347; border-radius: 12px;
+  color: #f0f0f0; font-size: 16px; outline: none;
+  transition: border-color 0.2s;
+}
+.input:focus { border-color: #00c896; }
+
+select.input { -webkit-appearance: none; appearance: none; cursor: pointer; }
+
+.card { background: #1a1d2e; border-radius: 16px; padding: 20px; }
+.result-box { background: #0d2218; border: 1px solid #00c896; border-radius: 12px; padding: 16px; text-align: center; }
+.result-value { font-size: 32px; font-weight: 700; color: #00c896; }
+.result-unit { font-size: 14px; color: #888; margin-top: 4px; }
+.formula-note { font-size: 12px; color: #666; line-height: 1.5; }
+.label { font-size: 14px; font-weight: 500; color: #aaa; margin-bottom: 8px; display: block; }
+.section-title { font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+.back-btn { background: none; border: none; color: #00c896; font-size: 24px; cursor: pointer; padding: 4px; }
+.warning-box { background: #1a1500; border: 1px solid #f5a623; border-radius: 12px; padding: 14px; }
