@@ -95,21 +95,29 @@ function calcOFD(wallT) {
   return wallT + WELD_BUILDUP + CAP_BUILDUP + SCREEN_FRONT + SCREEN_BACK + FILM_THICKNESS + SOCK_THICKNESS
 }
 
-// SFD by technique
-function calcSFD(od, wallT, technique) {
+// SFD by technique — per API 1104 21st Ed. / ASME V
+// Ug = F × d / D  →  D_min = F × OFD / Ug_max  →  SFD_min = D_min + OFD
+// Ug_max = 0.020" per API 1104
+const UG_MAX = 0.020  // inches
+
+function calcSFD(od, wallT, technique, focalSpotMm) {
   const ofd = calcOFD(wallT)
-  const id = od - 2 * wallT
+  const id  = od - 2 * wallT
   if (id <= 0) return null
+  const F = focalSpotMm / 25.4  // convert mm → inches
+
   switch (technique) {
     case 'swv':
-      // Source at pipe center → SFD = inner radius + OFD
+      // SWE/SWV panoramic: source at pipe center, SFD fixed by geometry
+      // SFD = inner radius + OFD = (OD/2 - wall) + OFD
       return (id / 2) + ofd
+
     case 'dwe_swv':
-      // Source outside, large bore — ASME T-274 min = 2× OD typical
-      return Math.max(2 * od, 24)
     case 'dwe_dwv':
-      // Source outside, small bore — typically 3× OD
-      return Math.max(3 * od, 12)
+      // Per API 1104: Ds_min = F × OFD / Ug_max
+      // SFD_min = Ds_min + OFD = OFD × (F / Ug_max + 1)
+      return ofd * (F / UG_MAX + 1)
+
     default:
       return 30
   }
@@ -192,7 +200,8 @@ export default function Home({ onNav }) {
   const od    = odIdx !== '' ? PIPE_OD[odIdx].od : null
   const t     = parseFloat(wallT) || 0
   const ofd   = t > 0 ? calcOFD(t) : null
-  const sfd   = (od && t > 0) ? calcSFD(od, t, technique) : null
+  const fs    = parseFloat(focalSpot) || ISOTOPES[isotope]?.focalSpot || 2.0
+  const sfd   = (od && t > 0) ? calcSFD(od, t, technique, fs) : null
   const radT  = t > 0 ? calcRadThickness(t, technique) : null
   const film  = FILMS[filmIdx]
 
@@ -212,7 +221,7 @@ export default function Home({ onNav }) {
     const dcf = densityCF(dTarget, film.gamma)
     const cmAdjusted = cm * film.factor * dcf
     const expMin = cmAdjusted / a
-    const fs = parseFloat(focalSpot) || ISOTOPES[isotope].focalSpot
+    const fs = parseFloat(focalSpot) || ISOTOPES[isotope]?.focalSpot || 2.0
     const ugMm = calcUg(fs, ofd, sfdUsed)
     const ugIn = ugMm ? ugMm / 25.4 : null
 
