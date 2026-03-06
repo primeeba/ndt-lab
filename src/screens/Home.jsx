@@ -126,15 +126,18 @@ function calcRadThickness(wallT, technique) {
   }
 }
 
-// ── BASE CURIE-MINUTES TABLE (Ir-192, carbon steel, D7 film, 30" SFD) ──
+// ── BASE CURIE-MINUTES TABLE ───────────────────────────────────
+// Calibrated to published Kodak/AGFA exposure chart data
+// Reference: D7/AA400 film, 0.010" Pb front+back screens, density 2.0H, 30" SFD, carbon steel
 function getBaseCurieMin(isotope, thicknessInch, sfdInch) {
   const charts = {
-    'Ir-192': [[0.25, 4], [0.375, 7], [0.5, 12], [0.625, 20], [0.75, 32],
-               [0.875, 52], [1.0, 80], [1.25, 150], [1.5, 280], [1.75, 500], [2.0, 900]],
-    'Se-75':  [[0.125, 6], [0.25, 15], [0.375, 35], [0.5, 75], [0.625, 150],
-               [0.75, 280], [0.875, 500], [1.0, 900]],
-    'Co-60':  [[0.5, 4], [0.75, 7], [1.0, 12], [1.5, 30], [2.0, 70],
-               [2.5, 150], [3.0, 300], [4.0, 800]],
+    'Ir-192': [[0.125, 1.5], [0.25, 4], [0.375, 9], [0.5, 20], [0.625, 45],
+               [0.75, 100], [0.875, 200], [1.0, 400], [1.25, 1200],
+               [1.5, 3500], [1.75, 8000], [2.0, 18000]],
+    'Se-75':  [[0.125, 3], [0.25, 8], [0.375, 20], [0.5, 50],
+               [0.625, 120], [0.75, 280], [0.875, 650], [1.0, 1500]],
+    'Co-60':  [[0.5, 5], [0.75, 10], [1.0, 18], [1.5, 45],
+               [2.0, 110], [2.5, 280], [3.0, 650], [4.0, 3500]],
   }
   const pts = charts[isotope]
   if (!pts) return null
@@ -182,6 +185,7 @@ export default function Home({ onNav }) {
   const [focalSpot, setFocal]   = useState('2.0')
   const [filmIdx, setFilmIdx]   = useState(0)
   const [targetD, setTargetD]   = useState('2.5')
+  const [sfdOverride, setSfdOv] = useState('')
   const [result, setResult]     = useState(null)
   const [error, setError]       = useState('')
 
@@ -200,7 +204,8 @@ export default function Home({ onNav }) {
     if (!a || a<=0){ setError('Enter source activity (Ci)'); return }
     if (od - 2*t <= 0){ setError('Wall thickness too large for this OD'); return }
 
-    const cm = getBaseCurieMin(isotope, radT, sfd)
+    const sfdUsed = parseFloat(sfdOverride) > 0 ? parseFloat(sfdOverride) : sfd
+    const cm = getBaseCurieMin(isotope, radT, sfdUsed)
     if (!cm) { setError('Thickness out of range for this isotope'); return }
 
     const dTarget = parseFloat(targetD) || 2.0
@@ -208,14 +213,14 @@ export default function Home({ onNav }) {
     const cmAdjusted = cm * film.factor * dcf
     const expMin = cmAdjusted / a
     const fs = parseFloat(focalSpot) || ISOTOPES[isotope].focalSpot
-    const ugMm = calcUg(fs, ofd, sfd)
+    const ugMm = calcUg(fs, ofd, sfdUsed)
     const ugIn = ugMm ? ugMm / 25.4 : null
 
     setResult({
       expMin, cmAdjusted,
       ofd, sfd, radT,
       ugIn, ugPass: ugIn !== null ? ugIn <= 0.020 : null,
-      filmLabel: film.label, dTarget, dcf,
+      filmLabel: film.label, dTarget, dcf, sfdUsed,
       summary: `${isotope} · ${PIPE_OD[odIdx].label} · ${t}" wall · ${a} Ci · ${TECHNIQUES.find(x=>x.id===technique).label}`,
     })
   }
@@ -264,6 +269,25 @@ export default function Home({ onNav }) {
             </div>
             <div style={{ fontSize: 10, color: '#444', marginTop: 8, lineHeight: 1.5 }}>
               OFD = T + 0.125 reinf + 0.0625 cap + 0.010+0.010 screens + 0.0625 film + 0.03125 sock
+            </div>
+            <div style={{ marginTop: 12, borderTop: '1px solid #1e3a2e', paddingTop: 10 }}>
+              <label style={{ fontSize: 11, color: '#00c896', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+                SFD OVERRIDE (optional)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input className="input" type="number" placeholder={`Auto: ${sfd ? sfd.toFixed(2) + '"' : '—'}`}
+                  value={sfdOverride} onChange={e => setSfdOv(e.target.value)}
+                  inputMode="decimal" style={{ flex: 1 }} />
+                {sfdOverride && (
+                  <button onClick={() => setSfdOv('')}
+                    style={{ background: '#2e3347', border: 'none', color: '#aaa', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12 }}>
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div style={{ fontSize: 10, color: '#444', marginTop: 4 }}>
+                Override if using non-panoramic setup or fixed procedure SFD (e.g., 30")
+              </div>
             </div>
           </div>
         )}
@@ -390,7 +414,7 @@ export default function Home({ onNav }) {
               <div style={{ fontSize: 11, color: '#555', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 10 }}>GEOMETRY USED</div>
               {[
                 ['OFD', result.ofd.toFixed(4) + '"'],
-                ['SFD', result.sfd.toFixed(3) + '"'],
+                ['SFD Used', result.sfdUsed.toFixed(3) + '"'],
                 ['Rad. Thickness', result.radT.toFixed(4) + '"'],
               ].map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
