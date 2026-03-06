@@ -89,34 +89,52 @@ const SCREEN_FRONT    = 0.010   // front lead screen
 const SCREEN_BACK     = 0.010   // back lead screen
 const FILM_THICKNESS  = 0.0625  // 1/16" film
 const SOCK_THICKNESS  = 0.03125 // 1/32" sock/cassette
+const EXTERNAL_PACK   = CAP_BUILDUP + SCREEN_FRONT + SCREEN_BACK + FILM_THICKNESS + SOCK_THICKNESS // 0.1875"
 
-// OFD = distance from source-side surface of specimen to film
-function calcOFD(wallT) {
-  return wallT + WELD_BUILDUP + CAP_BUILDUP + SCREEN_FRONT + SCREEN_BACK + FILM_THICKNESS + SOCK_THICKNESS
+// OFD per ASME V Article 2 T-274 / API 1104:
+// SWE/SWV: d = wall + weld reinforcement + external pack (source-side surface to film)
+// DWE:     d = full OD + external pack (source is outside, entire OD is the object span)
+function calcOFD(wallT, od, technique) {
+  if (technique === 'swv') {
+    return wallT + WELD_BUILDUP + EXTERNAL_PACK
+  } else {
+    // DWE/SWV or DWE/DWV — d = OD + external components
+    return od + EXTERNAL_PACK
+  }
 }
 
-// SFD by technique — per API 1104 21st Ed. / ASME V
-// Ug = F × d / D  →  D_min = F × OFD / Ug_max  →  SFD_min = D_min + OFD
-// Ug_max = 0.020" per API 1104
-const UG_MAX = 0.020  // inches
+// ASME V T-274.2 max Ug based on material thickness
+// API 1104 uses flat 0.020" for all pipeline thicknesses
+function getUgMax(wallT, isAPI1104 = true) {
+  if (isAPI1104) return 0.020
+  if (wallT <= 2.0)  return 0.020
+  if (wallT <= 3.0)  return 0.030
+  if (wallT <= 4.0)  return 0.040
+  return 0.070
+}
 
+// SFD per ASME V Article 2 T-274 / API 1104 21st Ed.
+// Formula: Ug = F × d / D  →  D_min = F × d / Ug_max  →  SFD_min = D_min + d
+// where d = OFD (technique-specific), D = source-to-near-surface distance
 function calcSFD(od, wallT, technique, focalSpotMm) {
-  const ofd = calcOFD(wallT)
+  const ofd = calcOFD(wallT, od, technique)
   const id  = od - 2 * wallT
   if (id <= 0) return null
-  const F = focalSpotMm / 25.4  // convert mm → inches
+  const F      = focalSpotMm / 25.4   // mm → inches
+  const ugMax  = getUgMax(wallT, true) // API 1104: always 0.020"
 
   switch (technique) {
     case 'swv':
-      // SWE/SWV panoramic: source at pipe center, SFD fixed by geometry
-      // SFD = inner radius + OFD = (OD/2 - wall) + OFD
+      // Panoramic: source at pipe center, geometry-fixed SFD
+      // D (source to inner surface) = id/2, OFD = wall + weld + external
       return (id / 2) + ofd
 
     case 'dwe_swv':
     case 'dwe_dwv':
-      // Per API 1104: Ds_min = F × OFD / Ug_max
-      // SFD_min = Ds_min + OFD = OFD × (F / Ug_max + 1)
-      return ofd * (F / UG_MAX + 1)
+      // Per ASME V T-274 / API 1104:
+      // D_min = F × OFD / Ug_max  →  SFD_min = OFD × (F/Ug_max + 1)
+      // OFD for DWE = OD + external pack
+      return ofd * (F / ugMax + 1)
 
     default:
       return 30
@@ -199,8 +217,9 @@ export default function Home({ onNav }) {
 
   const od    = odIdx !== '' ? PIPE_OD[odIdx].od : null
   const t     = parseFloat(wallT) || 0
-  const ofd   = t > 0 ? calcOFD(t) : null
+  const ofd   = ofdCalc
   const fs    = parseFloat(focalSpot) || ISOTOPES[isotope]?.focalSpot || 2.0
+  const ofdCalc = (od && t > 0) ? calcOFD(t, od, technique) : null
   const sfd   = (od && t > 0) ? calcSFD(od, t, technique, fs) : null
   const radT  = t > 0 ? calcRadThickness(t, technique) : null
   const film  = FILMS[filmIdx]
@@ -213,6 +232,7 @@ export default function Home({ onNav }) {
     if (!a || a<=0){ setError('Enter source activity (Ci)'); return }
     if (od - 2*t <= 0){ setError('Wall thickness too large for this OD'); return }
 
+    const ofdUsed = calcOFD(t, od, technique)
     const sfdUsed = parseFloat(sfdOverride) > 0 ? parseFloat(sfdOverride) : sfd
     const cm = getBaseCurieMin(isotope, radT, sfdUsed)
     if (!cm) { setError('Thickness out of range for this isotope'); return }
@@ -222,13 +242,14 @@ export default function Home({ onNav }) {
     const cmAdjusted = cm * film.factor * dcf
     const expMin = cmAdjusted / a
     const fs = parseFloat(focalSpot) || ISOTOPES[isotope]?.focalSpot || 2.0
-    const ugMm = calcUg(fs, ofd, sfdUsed)
+    const ugMm = calcUg(fs, ofdUsed, sfdUsed)
     const ugIn = ugMm ? ugMm / 25.4 : null
 
     setResult({
       expMin, cmAdjusted,
       ofd, sfd, radT,
-      ugIn, ugPass: ugIn !== null ? ugIn <= 0.020 : null,
+      ugIn, ugPass: ugIn !== null ? ugIn <= getUgMax(t) : null,
+      ugMax: getUgMax(t),
       filmLabel: film.label, dTarget, dcf, sfdUsed,
       summary: `${isotope} · ${PIPE_OD[odIdx].label} · ${t}" wall · ${a} Ci · ${TECHNIQUES.find(x=>x.id===technique).label}`,
     })
@@ -277,7 +298,10 @@ export default function Home({ onNav }) {
               ))}
             </div>
             <div style={{ fontSize: 10, color: '#444', marginTop: 8, lineHeight: 1.5 }}>
-              OFD = T + 0.125 reinf + 0.0625 cap + 0.010+0.010 screens + 0.0625 film + 0.03125 sock
+              {technique === 'swv'
+                ? 'OFD (SWV) = wall + 0.125 reinf + 0.0625 cap + 0.020 screens + 0.0625 film + 0.03125 sock'
+                : 'OFD (DWE) = full OD + 0.0625 cap + 0.020 screens + 0.0625 film + 0.03125 sock — per ASME V T-274'}
+              {' · SFD = OFD × (F/0.020 + 1) per API 1104'}
             </div>
             <div style={{ marginTop: 12, borderTop: '1px solid #1e3a2e', paddingTop: 10 }}>
               <label style={{ fontSize: 11, color: '#00c896', fontWeight: 700, display: 'block', marginBottom: 6 }}>
@@ -415,6 +439,7 @@ export default function Home({ onNav }) {
                 <div style={{ fontSize: 12, fontWeight: 700, color: result.ugPass ? '#00c896' : '#ff4444' }}>
                   {result.ugPass === true ? '✓ PASS' : result.ugPass === false ? '✗ FAIL' : ''}
                 </div>
+                <div style={{ fontSize: 10, color: '#444' }}>API 1104 max: {result.ugMax}"</div>
               </div>
             </div>
 
